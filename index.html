@@ -1,57 +1,14 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Aircraft Game</title>
-
-    <style>
-        body {
-            background-color: #000;
-            color: #fff;
-            font-family: Arial, sans-serif;
-            display: flex; /* कैनवास को center करने के लिए */
-            align-items: center;
-            justify-content: center;
-            margin: 0;
-            overflow: hidden; 
-            height: 100vh; /* पूरी हाइट */
-            width: 100vw; /* पूरी विड्थ */
-        }
-
-        h1 {
-            display: none;
-        }
-
-        canvas {
-            background-color: #000;
-            border: 3px solid #fff;
-            border-radius: 5px;
-            cursor: none; 
-            /* यह सुनिश्चित करेगा कि कैनवास स्क्रीन से बाहर न जाए */
-            max-width: 100%;
-            max-height: 100vh;
-        }
-    </style>
-</head>
-<body>
-    <canvas id="gameCanvas"></canvas>
-
-    <script>
+<script>
         // --- कैनवास सेटअप ---
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
-        
-        // कैनवास को शुरू में एक डिफ़ॉल्ट आकार दें
-        canvas.width = 300;
-        canvas.height = 400;
         
         // --- गेम स्टेट वेरिएबल्स ---
         let playerHealth = 3;
         const maxPlayerHealth = 3;
         let score = 0;
         let nextBossScore = 200;
-        let gameStarted = false; // BGM प्ले करने के लिए
+        let gameStarted = false; 
         let gameOver = false;
 
         // --- प्लेयर ---
@@ -92,8 +49,8 @@
         let shieldActive = false;
         let shieldTimer = 0;
 
-        // --- सभी एसेट्स की लिस्ट (चेक करने के लिए) ---
-        const assetList = [
+        // --- **नया:** सिर्फ इमेज एसेट्स की लिस्ट ---
+        const imageAssetList = [
             'assets/background.png',
             'assets/player.png',
             'assets/heart.png',
@@ -103,12 +60,11 @@
             'assets/bullet_red.png',
             'assets/power_shield.png',
             'assets/power_double_fire.png',
-            'assets/power_extra_life.png',
-            'sounds/bgm.mpeg'
+            'assets/power_extra_life.png'
         ];
 
         let assetsLoadedCount = 0;
-        const totalAssets = assetList.length;
+        const totalAssets = imageAssetList.length; // अब यह 10 है
         let failedAssets = []; // जो फ़ाइलें लोड नहीं हुईं
         let allAssetsChecked = false;
 
@@ -123,7 +79,10 @@
         const powerShieldImage = new Image();
         const powerDoubleImage = new Image();
         const powerLifeImage = new Image();
+        
+        // --- नया: BGM को अलग से सेट करें ---
         const bgm = new Audio();
+        bgm.src = 'sounds/bgm.mpeg'; // BGM का सोर्स
         bgm.loop = true;
         bgm.volume = 0.5;
 
@@ -138,81 +97,62 @@
             'assets/bullet_red.png': bulletRedImage,
             'assets/power_shield.png': powerShieldImage,
             'assets/power_double_fire.png': powerDoubleImage,
-            'assets/power_extra_life.png': powerLifeImage,
-            'sounds/bgm.mpeg': bgm
+            'assets/power_extra_life.png': powerLifeImage
         };
 
-        // --- नया: एसेट लोडिंग और एरर चेकिंग ---
+        // --- एसेट लोडिंग और एरर चेकिंग ---
         
         function assetLoaded(src) {
-            console.log(`सफलतापूर्वक लोड हुई: ${src}`);
             assetsLoadedCount++;
             checkIfDone();
         }
 
         function assetFailed(src) {
-            console.error(`लोड होने में विफल: ${src}`);
-            failedAssets.push(src); // फ़ेल लिस्ट में जोड़ें
-            checkIfDone(); // इसे भी गिना जाएगा
+            failedAssets.push(src); 
+            checkIfDone(); 
         }
 
         function checkIfDone() {
-            // जब सभी एसेट्स (सफल या विफल) चेक हो जाएँ
+            // जब सभी 10 इमेज एसेट्स चेक हो जाएँ
             if (assetsLoadedCount + failedAssets.length === totalAssets) {
                 allAssetsChecked = true;
                 if (failedAssets.length === 0) {
-                    // --- सफलता! ---
-                    console.log("सभी एसेट्स लोड हो गए। गेम शुरू हो रहा है...");
-                    resizeCanvas(); // कैनवास को 3:4 में सेट करें
-                    gameLoop();     // गेम शुरू करें
+                    console.log("All images loaded. Starting game...");
+                    gameLoop(); // गेम शुरू करें
                 } else {
-                    // --- विफलता! ---
-                    console.error("कुछ एसेट्स लोड नहीं हुए। एरर स्क्रीन दिखा रहा है।");
-                    resizeCanvas(); // कैनवास को 3:4 में सेट करें
+                    console.error("Failed to load images. Drawing error screen.");
                     drawErrorScreen(); // एरर स्क्रीन दिखाएँ
                 }
             }
         }
 
         function loadAssets() {
-            assetList.forEach(src => {
+            // सिर्फ इमेज लिस्ट को लोड करें
+            imageAssetList.forEach(src => {
                 const asset = assetMap[src];
-                
-                if (asset instanceof Image) {
-                    asset.onload = () => assetLoaded(src);
-                    asset.onerror = () => assetFailed(src);
-                    asset.src = src;
-                } else if (asset instanceof Audio) {
-                    // 'canplaythrough' यह पक्का करता है कि ऑडियो लोड हो गया है
-                    asset.oncanplaythrough = () => assetLoaded(src);
-                    asset.onerror = () => assetFailed(src);
-                    asset.src = src;
-                    asset.load(); // ऑडियो को लोड करना शुरू करें
-                }
+                asset.onload = () => assetLoaded(src);
+                asset.onerror = () => assetFailed(src);
+                asset.src = src;
             });
         }
         
-        // --- नया: एरर स्क्रीन ड्रा करने का फंक्शन ---
+        // --- एरर स्क्रीन (अंग्रेजी में) ---
         function drawErrorScreen() {
-            // काली स्क्रीन
             ctx.fillStyle = '#000';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
-            
-            // सफ़ेद बॉर्डर (जैसा आपके स्क्रीनशॉट में था)
             ctx.strokeStyle = 'white';
             ctx.lineWidth = 3;
             ctx.strokeRect(0, 0, canvas.width, canvas.height);
 
-            // एरर मैसेज
             ctx.fillStyle = 'red';
             ctx.font = '20px Arial';
             ctx.textAlign = 'center';
-            ctx.fillText('गेम लोड नहीं हुआ!', canvas.width / 2, 50);
+            ctx.fillText('ERROR: Game Failed to Load', canvas.width / 2, 50);
 
             ctx.fillStyle = 'white';
             ctx.font = '16px Arial';
             ctx.textAlign = 'left';
-            ctx.fillText('ये फ़ाइलें नहीं मिलीं या नाम गलत है:', 20, 100);
+            ctx.fillText('Files missing or named wrong:', 20, 100);
             
             ctx.fillStyle = '#FFB3B3'; // हल्का लाल
             let yPos = 130;
@@ -222,7 +162,8 @@
             });
 
             ctx.fillStyle = 'white';
-            ctx.fillText('अपना /assets/ और /sounds/ फोल्डर चेक करें!', 20, yPos + 30);
+            ctx.textAlign = 'center';
+            ctx.fillText('Check your /assets/ folder!', canvas.width / 2, yPos + 30);
         }
 
         // --- मोबाइल टच कंट्रोल्स ---
@@ -237,16 +178,15 @@
         canvas.addEventListener('touchstart', (e) => {
             e.preventDefault(); 
             
-            // --- पहले टच पर BGM शुरू करें ---
+            // --- नया: BGM को पहले टच पर प्ले करें ---
             if (!gameStarted && allAssetsChecked && failedAssets.length === 0) {
-                bgm.play().catch(e => console.error("ऑडियो प्ले नहीं हुआ:", e));
+                bgm.play().catch(e => console.error("Audio play failed (this is normal on some browsers until user interacts):", e));
                 gameStarted = true;
             }
             if (gameOver) {
                 restartGame();
                 return;
             }
-            // --- BGM लॉजिक खत्म ---
             
             const touchPos = getTouchPos(canvas, e);
             playerX = touchPos.x - playerWidth / 2;
@@ -262,8 +202,8 @@
         }, false);
 
         
-        // --- गेम लॉजिक फंक्शन्स (पहले जैसे ही) ---
-
+        // --- (बाकी सभी गेम लॉजिक फंक्शन्स - playerShoot, spawnEnemy, आदि - यहाँ हैं) ---
+        
         function playerShoot() {
             const bulletX = playerX + playerWidth / 2 - 2.5;
             const bulletY = playerY;
@@ -316,7 +256,8 @@
         }
         
         function spawnPowerUp(x, y) {
-            if (Math.random() < 0.1) { // 10% चांस
+            // **नया:** पॉवरअप चांस 20% कर दिया
+            if (Math.random() < 0.2) {
                 let type;
                 const rand = Math.random();
                 if (rand < 0.33) type = 'life';
@@ -392,17 +333,19 @@
 
         // --- मुख्य गेम लूप ---
         function gameLoop() {
+            if (allAssetsChecked && failedAssets.length > 0) {
+                drawErrorScreen(); // अगर एरर है तो बस एरर दिखाते रहें
+                return;
+            }
+            
             if (!gameOver) {
                 update();
             }
             draw();
-            // एरर स्क्रीन को अपडेट न करें, बस ड्रा करें
-            if (allAssetsChecked && failedAssets.length === 0) {
-                 requestAnimationFrame(gameLoop);
-            }
+            requestAnimationFrame(gameLoop);
         }
 
-        // --- अपडेट फंक्शन (सबकुछ चलाता है) ---
+        // --- अपडेट फंक्शन ---
         function update() {
             if (playerX < 0) playerX = 0;
             if (playerX > canvas.width - playerWidth) playerX = canvas.width - playerWidth;
@@ -529,12 +472,16 @@
             }
         }
         
-        // --- ड्रा फंक्शन (स्क्रीन पर सब कुछ दिखाता है) ---
+        // --- ड्रा फंक्शन ---
         function draw() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             ctx.drawImage(bgImage, 0, bgY, canvas.width, canvas.height);
             ctx.drawImage(bgImage, 0, bgY - canvas.height, canvas.width, canvas.height);
-            ctx.drawImage(playerImage, playerX, playerY, playerWidth, playerHeight);
+            
+            // **नया:** प्लेयर को ड्रा करने से पहले चेक करें कि वह लोड हुआ है
+            if (playerImage.complete && playerImage.naturalHeight !== 0) {
+                 ctx.drawImage(playerImage, playerX, playerY, playerWidth, playerHeight);
+            }
             
             if(shieldActive) {
                 ctx.strokeStyle = 'cyan';
@@ -559,4 +506,43 @@
                 ctx.fillStyle = 'red';
                 ctx.fillRect(bossX, bossY - 15, bossWidth, 10);
                 ctx.fillStyle = 'green';
-                ctx.fil
+                ctx.fillRect(bossX, bossY - 15, bossWidth * (bossHealth / 50), 10);
+            }
+            
+            for (const power of powerUps) {
+                let img;
+                if (power.type === 'life') img = powerLifeImage;
+                if (power.type === 'shield') img = powerShieldImage;
+                if (power.type === 'double') img = powerDoubleImage;
+                ctx.drawImage(img, power.x, power.y, power.width, power.height);
+            }
+
+            ctx.fillStyle = 'white';
+            ctx.font = '24px Arial';
+            ctx.textAlign = 'left';
+            ctx.fillText(`Score: ${score}`, 10, 30);
+
+            const heartWidth = 30;
+            const heartHeight = 30;
+            const heartPadding = 5;
+            for (let i = 0; i < playerHealth; i++) {
+                const heartX = canvas.width - (i + 1) * (heartWidth + heartPadding);
+                const heartY = 10;
+                ctx.drawImage(heartImage, heartX, heartY, heartWidth, heartHeight);
+            }
+            
+            if (gameOver) {
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = 'red';
+                ctx.font = '50px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('GAME OVER', canvas.width / 2, canvas.height / 2 - 30);
+                ctx.fillStyle = 'white';
+                ctx.font = '20px Arial';
+                ctx.fillText(`Final Score: ${score}`, canvas.width / 2, canvas.height / 2 + 10);
+                ctx.fillText('Touch to Restart', canvas.width / 2, canvas.height / 2 + 50);
+            }
+        }
+        
+        // --- 3:4 रेशियो
