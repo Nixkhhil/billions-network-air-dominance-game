@@ -10,17 +10,17 @@
             background-color: #000;
             color: #fff;
             font-family: Arial, sans-serif;
-            display: flex;
-            flex-direction: column;
+            display: flex; /* कैनवास को center करने के लिए */
             align-items: center;
             justify-content: center;
             margin: 0;
-            /* Prevents scrolling on mobile */
             overflow: hidden; 
+            height: 100vh; /* पूरी हाइट */
+            width: 100vw; /* पूरी विड्थ */
         }
 
         h1 {
-            display: none; /* We don't need the title anymore */
+            display: none;
         }
 
         canvas {
@@ -28,10 +28,9 @@
             border: 3px solid #fff;
             border-radius: 5px;
             cursor: none; 
-            /* Make canvas fill the screen */
-            position: absolute;
-            top: 0;
-            left: 0;
+            /* यह सुनिश्चित करेगा कि कैनवास स्क्रीन से बाहर न जाए */
+            max-width: 100%;
+            max-height: 100vh;
         }
     </style>
 </head>
@@ -39,46 +38,46 @@
     <canvas id="gameCanvas"></canvas>
 
     <script>
-        // --- Setup Canvas ---
+        // --- कैनवास सेटअप ---
         const canvas = document.getElementById('gameCanvas');
-        const ctx = canvas.getContext('d');
+        const ctx = canvas.getContext('2d');
         
-        // Set canvas to fill the screen
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
+        // कैनवास को शुरू में एक डिफ़ॉल्ट आकार दें
+        canvas.width = 300;
+        canvas.height = 400;
         
-        // --- Game State Variables ---
+        // --- गेम स्टेट वेरिएबल्स ---
         let playerHealth = 3;
         const maxPlayerHealth = 3;
         let score = 0;
         let nextBossScore = 200;
-        let gameStarted = false; // To handle BGM play on first touch
+        let gameStarted = false; // BGM प्ले करने के लिए
         let gameOver = false;
 
-        // --- Player ---
+        // --- प्लेयर ---
         let playerX = canvas.width / 2 - 25;
         let playerY = canvas.height - 70;
         const playerWidth = 50;
         const playerHeight = 50;
 
-        // --- Scrolling Background ---
+        // --- स्क्रॉलिंग बैकग्राउंड ---
         let bgY = 0;
-        const bgSpeed = 1; // How fast the background scrolls
+        const bgSpeed = 1; 
 
-        // --- Shooting ---
+        // --- शूटिंग ---
         let playerBullets = [];
         let enemyBullets = [];
         let playerShootTimer = 0;
-        const playerShootCooldown = 15; // Frames (60 = 1 sec)
+        const playerShootCooldown = 15; 
         let doubleFireActive = false;
         let doubleFireTimer = 0;
 
-        // --- Enemies ---
+        // --- दुश्मन ---
         let enemies = [];
         let enemySpawnTimer = 0;
-        const enemySpawnRate = 100; // Lower is faster
+        const enemySpawnRate = 100;
 
-        // --- Boss ---
+        // --- बॉस ---
         let bossActive = false;
         let bossHealth = 50;
         let bossX = canvas.width / 2 - 75;
@@ -88,76 +87,145 @@
         let bossShootTimer = 0;
         let bossMovingIn = false;
 
-        // --- Power-ups ---
+        // --- पॉवर-अप्स ---
         let powerUps = [];
         let shieldActive = false;
         let shieldTimer = 0;
 
-        // --- Load Assets ---
-        let assetsLoaded = 0;
-        const totalAssets = 11; // UPDATE THIS COUNT
+        // --- सभी एसेट्स की लिस्ट (चेक करने के लिए) ---
+        const assetList = [
+            'assets/background.png',
+            'assets/player.png',
+            'assets/heart.png',
+            'assets/enemy.png',
+            'assets/boss.png',
+            'assets/bullet_green.png',
+            'assets/bullet_red.png',
+            'assets/power_shield.png',
+            'assets/power_double_fire.png',
+            'assets/power_extra_life.png',
+            'sounds/bgm.mpeg'
+        ];
 
-        function assetLoaded() {
-            assetsLoaded++;
-            if (assetsLoaded === totalAssets) {
-                // Start the game loop
-                gameLoop(); 
+        let assetsLoadedCount = 0;
+        const totalAssets = assetList.length;
+        let failedAssets = []; // जो फ़ाइलें लोड नहीं हुईं
+        let allAssetsChecked = false;
+
+        // --- एसेट ऑब्जेक्ट्स ---
+        const bgImage = new Image();
+        const playerImage = new Image();
+        const heartImage = new Image();
+        const enemyImage = new Image();
+        const bossImage = new Image();
+        const bulletGreenImage = new Image();
+        const bulletRedImage = new Image();
+        const powerShieldImage = new Image();
+        const powerDoubleImage = new Image();
+        const powerLifeImage = new Image();
+        const bgm = new Audio();
+        bgm.loop = true;
+        bgm.volume = 0.5;
+
+        // एसेट्स को उनके सोर्स से मैप करना
+        const assetMap = {
+            'assets/background.png': bgImage,
+            'assets/player.png': playerImage,
+            'assets/heart.png': heartImage,
+            'assets/enemy.png': enemyImage,
+            'assets/boss.png': bossImage,
+            'assets/bullet_green.png': bulletGreenImage,
+            'assets/bullet_red.png': bulletRedImage,
+            'assets/power_shield.png': powerShieldImage,
+            'assets/power_double_fire.png': powerDoubleImage,
+            'assets/power_extra_life.png': powerLifeImage,
+            'sounds/bgm.mpeg': bgm
+        };
+
+        // --- नया: एसेट लोडिंग और एरर चेकिंग ---
+        
+        function assetLoaded(src) {
+            console.log(`सफलतापूर्वक लोड हुई: ${src}`);
+            assetsLoadedCount++;
+            checkIfDone();
+        }
+
+        function assetFailed(src) {
+            console.error(`लोड होने में विफल: ${src}`);
+            failedAssets.push(src); // फ़ेल लिस्ट में जोड़ें
+            checkIfDone(); // इसे भी गिना जाएगा
+        }
+
+        function checkIfDone() {
+            // जब सभी एसेट्स (सफल या विफल) चेक हो जाएँ
+            if (assetsLoadedCount + failedAssets.length === totalAssets) {
+                allAssetsChecked = true;
+                if (failedAssets.length === 0) {
+                    // --- सफलता! ---
+                    console.log("सभी एसेट्स लोड हो गए। गेम शुरू हो रहा है...");
+                    resizeCanvas(); // कैनवास को 3:4 में सेट करें
+                    gameLoop();     // गेम शुरू करें
+                } else {
+                    // --- विफलता! ---
+                    console.error("कुछ एसेट्स लोड नहीं हुए। एरर स्क्रीन दिखा रहा है।");
+                    resizeCanvas(); // कैनवास को 3:4 में सेट करें
+                    drawErrorScreen(); // एरर स्क्रीन दिखाएँ
+                }
             }
         }
 
-        // Load background
-        const bgImage = new Image();
-        bgImage.src = 'assets/background.png';
-        bgImage.onload = assetLoaded;
-
-        // Load player
-        const playerImage = new Image();
-        playerImage.src = 'assets/player.png';
-        playerImage.onload = assetLoaded;
-
-        // Load heart
-        const heartImage = new Image();
-        heartImage.src = 'assets/heart.png';
-        heartImage.onload = assetLoaded;
+        function loadAssets() {
+            assetList.forEach(src => {
+                const asset = assetMap[src];
+                
+                if (asset instanceof Image) {
+                    asset.onload = () => assetLoaded(src);
+                    asset.onerror = () => assetFailed(src);
+                    asset.src = src;
+                } else if (asset instanceof Audio) {
+                    // 'canplaythrough' यह पक्का करता है कि ऑडियो लोड हो गया है
+                    asset.oncanplaythrough = () => assetLoaded(src);
+                    asset.onerror = () => assetFailed(src);
+                    asset.src = src;
+                    asset.load(); // ऑडियो को लोड करना शुरू करें
+                }
+            });
+        }
         
-        // --- NEW ASSETS ---
-        const enemyImage = new Image();
-        enemyImage.src = 'assets/enemy.png';
-        enemyImage.onload = assetLoaded;
+        // --- नया: एरर स्क्रीन ड्रा करने का फंक्शन ---
+        function drawErrorScreen() {
+            // काली स्क्रीन
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // सफ़ेद बॉर्डर (जैसा आपके स्क्रीनशॉट में था)
+            ctx.strokeStyle = 'white';
+            ctx.lineWidth = 3;
+            ctx.strokeRect(0, 0, canvas.width, canvas.height);
 
-        const bossImage = new Image();
-        bossImage.src = 'assets/boss.png';
-        bossImage.onload = assetLoaded;
+            // एरर मैसेज
+            ctx.fillStyle = 'red';
+            ctx.font = '20px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('गेम लोड नहीं हुआ!', canvas.width / 2, 50);
 
-        const bulletGreenImage = new Image();
-        bulletGreenImage.src = 'assets/bullet_green.png';
-        bulletGreenImage.onload = assetLoaded;
+            ctx.fillStyle = 'white';
+            ctx.font = '16px Arial';
+            ctx.textAlign = 'left';
+            ctx.fillText('ये फ़ाइलें नहीं मिलीं या नाम गलत है:', 20, 100);
+            
+            ctx.fillStyle = '#FFB3B3'; // हल्का लाल
+            let yPos = 130;
+            failedAssets.forEach(file => {
+                ctx.fillText(file, 30, yPos);
+                yPos += 25;
+            });
 
-        const bulletRedImage = new Image();
-        bulletRedImage.src = 'assets/bullet_red.png';
-        bulletRedImage.onload = assetLoaded;
+            ctx.fillStyle = 'white';
+            ctx.fillText('अपना /assets/ और /sounds/ फोल्डर चेक करें!', 20, yPos + 30);
+        }
 
-        const powerShieldImage = new Image();
-        powerShieldImage.src = 'assets/power_shield.png';
-        powerShieldImage.onload = assetLoaded;
-
-        const powerDoubleImage = new Image();
-        powerDoubleImage.src = 'assets/power_double_fire.png';
-        powerDoubleImage.onload = assetLoaded;
-
-        const powerLifeImage = new Image();
-        powerLifeImage.src = 'assets/power_extra_life.png';
-        powerLifeImage.onload = assetLoaded;
-        
-        // Load BGM
-        const bgm = new Audio('sounds/bgm.mpeg');
-        bgm.loop = true;
-        bgm.volume = 0.5;
-        // We can't play until user interacts, but we count it as loaded
-        assetLoaded(); 
-
-
-        // --- Mobile Touch Controls ---
+        // --- मोबाइल टच कंट्रोल्स ---
         function getTouchPos(canvasDom, touchEvent) {
             const rect = canvasDom.getBoundingClientRect();
             return {
@@ -169,16 +237,16 @@
         canvas.addEventListener('touchstart', (e) => {
             e.preventDefault(); 
             
-            // --- NEW: Start BGM on first touch ---
-            if (!gameStarted) {
-                bgm.play().catch(e => console.error("Audio play failed:", e));
+            // --- पहले टच पर BGM शुरू करें ---
+            if (!gameStarted && allAssetsChecked && failedAssets.length === 0) {
+                bgm.play().catch(e => console.error("ऑडियो प्ले नहीं हुआ:", e));
                 gameStarted = true;
             }
             if (gameOver) {
                 restartGame();
                 return;
             }
-            // --- End BGM logic ---
+            // --- BGM लॉजिक खत्म ---
             
             const touchPos = getTouchPos(canvas, e);
             playerX = touchPos.x - playerWidth / 2;
@@ -194,23 +262,18 @@
         }, false);
 
         
-        // --- Game Logic Functions ---
+        // --- गेम लॉजिक फंक्शन्स (पहले जैसे ही) ---
 
         function playerShoot() {
-            // Create a new bullet at player's position
-            const bulletX = playerX + playerWidth / 2 - 2.5; // Centered
+            const bulletX = playerX + playerWidth / 2 - 2.5;
             const bulletY = playerY;
             const bulletWidth = 5;
             const bulletHeight = 15;
-
             playerBullets.push({ x: bulletX, y: bulletY, width: bulletWidth, height: bulletHeight });
 
             if (doubleFireActive) {
-                // Add a second bullet
-                const bulletX2 = playerX + playerWidth / 2 - 12.5; // Slightly left
-                const bulletX3 = playerX + playerWidth / 2 + 7.5;  // Slightly right
-                playerBullets.push({ x: bulletX2, y: bulletY, width: bulletWidth, height: bulletHeight });
-                playerBullets.push({ x: bulletX3, y: bulletY, width: bulletWidth, height: bulletHeight });
+                playerBullets.push({ x: bulletX - 10, y: bulletY, width: bulletWidth, height: bulletHeight });
+                playerBullets.push({ x: bulletX + 10, y: bulletY, width: bulletWidth, height: bulletHeight });
             }
         }
 
@@ -218,17 +281,9 @@
             const enemyWidth = 50;
             const enemyHeight = 50;
             const enemyX = Math.random() * (canvas.width - enemyWidth);
-            const enemyY = -enemyHeight; // Start above screen
-            const enemySpeed = Math.random() * 2 + 1; // Random speed
-
-            enemies.push({ 
-                x: enemyX, 
-                y: enemyY, 
-                width: enemyWidth, 
-                height: enemyHeight, 
-                speed: enemySpeed,
-                shootTimer: Math.random() * 100 + 50 // Staggered shooting
-            });
+            const enemyY = -enemyHeight;
+            const enemySpeed = Math.random() * 2 + 1;
+            enemies.push({ x: enemyX, y: enemyY, width: enemyWidth, height: enemyHeight, speed: enemySpeed, shootTimer: Math.random() * 100 + 50 });
         }
         
         function enemyShoot(enemy) {
@@ -237,7 +292,6 @@
             const bulletX = enemy.x + enemy.width / 2 - bulletWidth / 2;
             const bulletY = enemy.y + enemy.height;
             const bulletSpeed = 4;
-            
             enemyBullets.push({x: bulletX, y: bulletY, width: bulletWidth, height: bulletHeight, speed: bulletSpeed});
         }
 
@@ -245,49 +299,31 @@
             bossActive = true;
             bossHealth = 50;
             bossX = canvas.width / 2 - bossWidth / 2;
-            bossY = -bossHeight; // Start above screen
-            bossMovingIn = true; // Set flag to move into position
+            bossY = -bossHeight;
+            bossMovingIn = true;
             nextBossScore += 200; 
-            // Stop regular enemies
             enemies = []; 
         }
 
         function bossShoot() {
-            // 4-Lane Fire
             const bulletSpeed = 5;
             const bulletWidth = 10;
             const bulletHeight = 10;
-            
-            // Lane 1
-            enemyBullets.push({x: bossX + (bossWidth * 0.2) - bulletWidth/2, y: bossY + bossHeight, width: bulletWidth, height: bulletHeight, speed: bulletSpeed});
-            // Lane 2
-            enemyBullets.push({x: bossX + (bossWidth * 0.4) - bulletWidth/2, y: bossY + bossHeight, width: bulletWidth, height: bulletHeight, speed: bulletSpeed});
-            // Lane 3
-            enemyBullets.push({x: bossX + (bossWidth * 0.6) - bulletWidth/2, y: bossY + bossHeight, width: bulletWidth, height: bulletHeight, speed: bulletSpeed});
-            // Lane 4
-            enemyBullets.push({x: bossX + (bossWidth * 0.8) - bulletWidth/2, y: bossY + bossHeight, width: bulletWidth, height: bulletHeight, speed: bulletSpeed});
+            const lanes = [0.2, 0.4, 0.6, 0.8]; // 4 लेन
+            lanes.forEach(lane => {
+                 enemyBullets.push({x: bossX + (bossWidth * lane) - bulletWidth/2, y: bossY + bossHeight, width: bulletWidth, height: bulletHeight, speed: bulletSpeed});
+            });
         }
         
         function spawnPowerUp(x, y) {
-            if (Math.random() < 0.1) { // 10% chance to spawn
+            if (Math.random() < 0.1) { // 10% चांस
                 let type;
                 const rand = Math.random();
-                if (rand < 0.33) {
-                    type = 'life';
-                } else if (rand < 0.66) {
-                    type = 'shield';
-                } else {
-                    type = 'double';
-                }
+                if (rand < 0.33) type = 'life';
+                else if (rand < 0.66) type = 'shield';
+                else type = 'double';
                 
-                powerUps.push({
-                    x: x, 
-                    y: y, 
-                    width: 30, 
-                    height: 30, 
-                    type: type, 
-                    speed: 2
-                });
+                powerUps.push({ x: x, y: y, width: 30, height: 30, type: type, speed: 2 });
             }
         }
 
@@ -300,16 +336,14 @@
             );
         }
 
-        // --- Game Logic (Called from update loop) ---
         function enemyKilled(enemyIndex) {
-            spawnPowerUp(enemies[enemyIndex].x, enemies[enemyIndex].y); // Chance to spawn power-up
-            enemies.splice(enemyIndex, 1); // Remove enemy
+            spawnPowerUp(enemies[enemyIndex].x, enemies[enemyIndex].y);
+            enemies.splice(enemyIndex, 1);
             score += 10;
         }
 
         function playerHit() {
-            if (shieldActive) return; // Player is invincible
-            
+            if (shieldActive) return;
             playerHealth--;
             if (playerHealth <= 0) {
                 gameOver = true;
@@ -317,28 +351,25 @@
         }
 
         function addLife() {
-            if (playerHealth < maxPlayerHealth) {
-                playerHealth++;
-            }
+            if (playerHealth < maxPlayerHealth) playerHealth++;
         }
         
         function activateShield() {
             shieldActive = true;
-            shieldTimer = 300; // 5 seconds (60fps * 5)
+            shieldTimer = 300; // 5 सेकंड
         }
         
         function activateDoubleFire() {
             doubleFireActive = true;
-            doubleFireTimer = 300; // 5 seconds
+            doubleFireTimer = 300; // 5 सेकंड
         }
 
         function bossHit() {
             bossHealth--;
-            score += 5; // Small bonus for each hit
+            score += 5;
             if (bossHealth <= 0) {
                 bossActive = false;
-                score += 500; // Big bonus for kill
-                // Spawn a bunch of powerups
+                score += 500;
                 spawnPowerUp(bossX + bossWidth * 0.2, bossY + bossHeight / 2);
                 spawnPowerUp(bossX + bossWidth * 0.4, bossY + bossHeight / 2);
                 spawnPowerUp(bossX + bossWidth * 0.6, bossY + bossHeight / 2);
@@ -359,30 +390,28 @@
             playerY = canvas.height - 70;
         }
 
-        // --- Main Game Loop ---
+        // --- मुख्य गेम लूप ---
         function gameLoop() {
             if (!gameOver) {
                 update();
             }
             draw();
-            requestAnimationFrame(gameLoop);
+            // एरर स्क्रीन को अपडेट न करें, बस ड्रा करें
+            if (allAssetsChecked && failedAssets.length === 0) {
+                 requestAnimationFrame(gameLoop);
+            }
         }
 
-        // --- Update Function (Moves everything) ---
+        // --- अपडेट फंक्शन (सबकुछ चलाता है) ---
         function update() {
-            // Keep player within bounds
             if (playerX < 0) playerX = 0;
             if (playerX > canvas.width - playerWidth) playerX = canvas.width - playerWidth;
             if (playerY < 0) playerY = 0;
             if (playerY > canvas.height - playerHeight) playerY = canvas.height - playerHeight;
 
-            // Scroll background
             bgY += bgSpeed;
-            if (bgY >= canvas.height) {
-                bgY = 0;
-            }
+            if (bgY >= canvas.height) bgY = 0;
             
-            // --- Update Power-up Timers ---
             if (shieldActive) {
                 shieldTimer--;
                 if (shieldTimer <= 0) shieldActive = false;
@@ -392,30 +421,22 @@
                 if (doubleFireTimer <= 0) doubleFireActive = false;
             }
 
-            // --- Player Shooting ---
             playerShootTimer++;
             if (playerShootTimer >= playerShootCooldown) {
                 playerShoot();
                 playerShootTimer = 0;
             }
 
-            // --- Move Player Bullets ---
             for (let i = playerBullets.length - 1; i >= 0; i--) {
-                playerBullets[i].y -= 7; // Bullet speed
-                if (playerBullets[i].y < 0) {
-                    playerBullets.splice(i, 1); // Remove if off-screen
-                }
+                playerBullets[i].y -= 7;
+                if (playerBullets[i].y < 0) playerBullets.splice(i, 1);
             }
             
-            // --- Move Enemy Bullets ---
             for (let i = enemyBullets.length - 1; i >= 0; i--) {
                 enemyBullets[i].y += enemyBullets[i].speed;
-                if (enemyBullets[i].y > canvas.height) {
-                    enemyBullets.splice(i, 1); // Remove if off-screen
-                }
+                if (enemyBullets[i].y > canvas.height) enemyBullets.splice(i, 1);
             }
 
-            // --- Spawn & Move Enemies ---
             if (!bossActive) {
                 enemySpawnTimer++;
                 if (enemySpawnTimer >= enemySpawnRate) {
@@ -426,65 +447,49 @@
                 for (let i = enemies.length - 1; i >= 0; i--) {
                     let enemy = enemies[i];
                     enemy.y += enemy.speed;
-                    
-                    // Enemy shooting
                     enemy.shootTimer--;
                     if(enemy.shootTimer <= 0) {
                         enemyShoot(enemy);
-                        enemy.shootTimer = 150 + Math.random() * 100; // Reset timer
+                        enemy.shootTimer = 150 + Math.random() * 100;
                     }
-                    
-                    if (enemy.y > canvas.height) {
-                        enemies.splice(i, 1); // Remove if off-screen
-                    }
+                    if (enemy.y > canvas.height) enemies.splice(i, 1);
                 }
             }
             
-            // --- Update Boss ---
             if (bossActive) {
                 if (bossMovingIn) {
-                    bossY += 2; // Move into position
-                    if (bossY >= 50) {
-                        bossMovingIn = false;
-                    }
+                    bossY += 2;
+                    if (bossY >= 50) bossMovingIn = false;
                 }
                 
-                // Boss shooting
                 bossShootTimer++;
-                if (bossShootTimer >= 80) { // Fires faster than regular enemies
+                if (bossShootTimer >= 80) {
                     bossShoot();
                     bossShootTimer = 0;
                 }
             }
             
-            // --- Move Power-ups ---
             for (let i = powerUps.length - 1; i >= 0; i--) {
                 powerUps[i].y += powerUps[i].speed;
-                if (powerUps[i].y > canvas.height) {
-                    powerUps.splice(i, 1);
-                }
+                if (powerUps[i].y > canvas.height) powerUps.splice(i, 1);
             }
 
-            // --- Check for Boss Spawn ---
             if (!bossActive && score >= nextBossScore) {
                 spawnBoss();
             }
 
-            // --- Collision Detection ---
             const playerRect = {x: playerX, y: playerY, width: playerWidth, height: playerHeight};
             
-            // Player Bullets vs Enemies
             for (let i = playerBullets.length - 1; i >= 0; i--) {
                 for (let j = enemies.length - 1; j >= 0; j--) {
                     if (checkCollision(playerBullets[i], enemies[j])) {
                         playerBullets.splice(i, 1);
                         enemyKilled(j);
-                        break; // Stop checking this bullet
+                        break;
                     }
                 }
             }
             
-            // Player Bullets vs Boss
             if(bossActive) {
                 const bossRect = {x: bossX, y: bossY, width: bossWidth, height: bossHeight};
                 for (let i = playerBullets.length - 1; i >= 0; i--) {
@@ -496,7 +501,6 @@
                 }
             }
             
-            // Enemy Bullets vs Player
             for (let i = enemyBullets.length - 1; i >= 0; i--) {
                 if (checkCollision(enemyBullets[i], playerRect)) {
                     enemyBullets.splice(i, 1);
@@ -505,7 +509,6 @@
                 }
             }
             
-            // Enemies vs Player
             for (let i = enemies.length - 1; i >= 0; i--) {
                 if (checkCollision(enemies[i], playerRect)) {
                     enemies.splice(i, 1);
@@ -514,7 +517,6 @@
                 }
             }
             
-            // Power-ups vs Player
             for (let i = powerUps.length - 1; i >= 0; i--) {
                 if (checkCollision(powerUps[i], playerRect)) {
                     let power = powerUps[i];
@@ -527,20 +529,13 @@
             }
         }
         
-        // --- Draw Function (Puts everything on screen) ---
+        // --- ड्रा फंक्शन (स्क्रीन पर सब कुछ दिखाता है) ---
         function draw() {
-            // Clear canvas
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-            // --- Draw Scrolling Background ---
-            // Draw it twice: one in its position, one above it
             ctx.drawImage(bgImage, 0, bgY, canvas.width, canvas.height);
             ctx.drawImage(bgImage, 0, bgY - canvas.height, canvas.width, canvas.height);
-
-            // --- Draw Player ---
             ctx.drawImage(playerImage, playerX, playerY, playerWidth, playerHeight);
             
-            // Draw Shield
             if(shieldActive) {
                 ctx.strokeStyle = 'cyan';
                 ctx.lineWidth = 3;
@@ -549,23 +544,19 @@
                 ctx.stroke();
             }
 
-            // --- Draw Bullets ---
             for (const bullet of playerBullets) {
                 ctx.drawImage(bulletGreenImage, bullet.x, bullet.y, bullet.width, bullet.height);
             }
             for (const bullet of enemyBullets) {
                 ctx.drawImage(bulletRedImage, bullet.x, bullet.y, bullet.width, bullet.height);
             }
-            
-            // --- Draw Enemies ---
             for (const enemy of enemies) {
                 ctx.drawImage(enemyImage, enemy.x, enemy.y, enemy.width, enemy.height);
             }
             
-            // --- Draw Boss ---
             if(bossActive) {
                 ctx.drawImage(bossImage, bossX, bossY, bossWidth, bossHeight);
-                // Draw boss health bar
                 ctx.fillStyle = 'red';
                 ctx.fillRect(bossX, bossY - 15, bossWidth, 10);
-      
+                ctx.fillStyle = 'green';
+                ctx.fil
